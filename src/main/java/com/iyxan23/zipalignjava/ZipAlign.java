@@ -67,8 +67,46 @@ public class ZipAlign {
             passBytes(stream, outStream, compressedSize);
         }
 
+        int centralDirectoryPosition = outStream.bytesPosition - 4;
+
         // we're at the central directory
-        // todo
+        for (int fileOffset : fileOffsets) {
+            passBytes(stream, outStream, 24);
+
+            short fileNameLen = stream.readShort();
+            outStream.writeShort(fileNameLen);
+
+            short extraFieldLen = stream.readShort();
+            outStream.writeShort(extraFieldLen);
+
+            short fileCommentLen = stream.readShort();
+            outStream.writeShort(fileCommentLen);
+
+            passBytes(stream, outStream, 8);
+
+            // offset of local header
+            stream.readInt();
+            outStream.writeInt(fileOffset);
+
+            passBytes(stream, outStream, fileNameLen);
+            passBytes(stream, outStream, extraFieldLen);
+            passBytes(stream, outStream, fileCommentLen);
+
+            if (stream.readInt() != 0x504b0102)
+                throw new IOException("central directory file header signature doesn't align");
+        }
+
+        // end of central directory record
+        passBytes(stream, outStream, 12);
+
+        // offset of where central directory starts
+        stream.readInt();
+        outStream.writeInt(centralDirectoryPosition);
+
+        short commentLen = stream.readShort();
+        outStream.writeShort(commentLen);
+
+        passBytes(stream, outStream, commentLen);
     }
 
     /**
