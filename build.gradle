@@ -1,0 +1,13 @@
+plugins {
+    id 'java'
+}
+
+group 'com.iyxan23'
+version '1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+}
