@@ -10,14 +10,51 @@ import java.util.ArrayList;
 
 public class ZipAlign {
     /**
-     * Aligns the zip as how zipalign would from the specified input stream into the specified output stream.
+     * Aligns the zip from the given input stream and outputs it to the given output stream with 4 byte alignment.<br/>
+     * <br/>
+     * <b>NOTE: This function assumes that the given input stream is a valid zip file and skims manually through bytes.
+     * It is advised to first verify the zip before passing it to this function.</b><br/>
+     * <br/>
+     * Example usage:
+     * <pre>
+     *     FileInputStream zipIn = ...;
+     *     FileOutputStream zipOut = ...;
+     *
+     *     ZipAlign.alignZip(zipIn, zipOut);
+     * </pre>
+     *
      * @param zipIn The zip input stream
      * @param zipOut The zip output stream
+     * @see ZipAlign#alignZip(InputStream, OutputStream, int)
      */
     public static void alignZip(InputStream zipIn, OutputStream zipOut) throws IOException {
+        alignZip(zipIn, zipOut, 4);
+    }
+
+    /**
+     * Aligns the zip from the given input stream and outputs it to the given output stream.<br/>
+     * <br/>
+     * <b>NOTE: This function assumes that the given input stream is a valid zip file and skims manually through bytes.
+     * It is advised to first verify the zip before passing it to this function.</b><br/>
+     * <br/>
+     * Example usage:
+     * <pre>
+     *     FileInputStream zipIn = ...;
+     *     FileOutputStream zipOut = ...;
+     *
+     *     ZipAlign.alignZip(zipIn, zipOut, 4);
+     * </pre>
+     *
+     * @param zipIn The zip input stream
+     * @param zipOut The zip output stream
+     * @param alignment Alignment in bytes, usually 4
+     * @see ZipAlign#alignZip(InputStream, OutputStream)
+     */
+    public static void alignZip(InputStream zipIn, OutputStream zipOut, int alignment) throws IOException {
         ByteBuffer inBuffer = ByteBuffer.wrap(readAll(zipIn));
         // zip's file format is little endian
         inBuffer.order(ByteOrder.LITTLE_ENDIAN);
+
         LittleEndianOutputStream outStream = new LittleEndianOutputStream(zipOut);
         ArrayList<Integer> fileOffsets = new ArrayList<>();
 
@@ -59,10 +96,10 @@ public class ZipAlign {
             short extraFieldLen = inBuffer.getShort();
 
             // we're going to extend this extra field (if the data is uncompressed) so that the data will align into
-            // 4-byte boundaries
+            // the specified alignment boundaries (usually 4 bytes)
             int dataStartPoint = outStream.bytesWritten() + 2 + fileNameLen + extraFieldLen;
-            int wrongOffset = dataStartPoint % 4;
-            int paddingSize = wrongOffset == 0 ? 0 : 4 - wrongOffset;
+            int wrongOffset = dataStartPoint % alignment;
+            int paddingSize = wrongOffset == 0 ? 0 : alignment - wrongOffset;
 
             if (shouldAlign) {
                 outStream.writeShort(extraFieldLen + paddingSize);
@@ -70,11 +107,7 @@ public class ZipAlign {
                 outStream.writeShort(extraFieldLen);
             }
 
-            byte[] fileName = new byte[fileNameLen];
-
-            inBuffer.get(fileName);
-            outStream.write(fileName);
-
+            passBytes(inBuffer, outStream, fileNameLen);
             passBytes(inBuffer, outStream, extraFieldLen);
 
             if (shouldAlign && paddingSize != 0) {
