@@ -29,6 +29,8 @@ ZipAlign.alignZip(zipIn, zipOut);
 // hell yeah it's that easy!
 ```
 
+**NOTE**: The library doesn't do anything to verify if the zip stream given is valid; it assumes everything is valid and skims through bytes. You might need to verify the zip file first.
+
 #### Using it as a CLI program
 
 or just run it as a cli program:
