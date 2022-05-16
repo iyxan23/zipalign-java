@@ -78,14 +78,11 @@ public class ZipAlign {
         int centralDirectoryPosition = outStream.bytesWritten() - 4;
         int fileOffsetIndex = 0;
 
-        System.out.println("central dir pos: " + centralDirectoryPosition);
-
         // we're at the central directory
         do {
             outStream.writeInt(0x02014b50);
             int fileOffset = fileOffsets.get(fileOffsetIndex);
 
-            System.out.println("doing " + fileOffset);
             passBytes(inBuffer, outStream, 24);
 
             short fileNameLen = inBuffer.getShort();
@@ -100,16 +97,10 @@ public class ZipAlign {
             passBytes(inBuffer, outStream, 8);
 
             // offset of local header
-            int offset = inBuffer.getInt();
-            System.out.println("original offset: " + offset + ", new offset: " + fileOffset);
+            inBuffer.getInt();
             outStream.writeInt(fileOffset);
 
-            byte[] fileName = new byte[fileNameLen];
-            inBuffer.get(fileName);
-
-            System.out.println("filename: " + new String(fileName, StandardCharsets.UTF_8));
-
-            outStream.write(fileName);
+            passBytes(inBuffer, outStream, fileNameLen);
             passBytes(inBuffer, outStream, extraFieldLen);
             passBytes(inBuffer, outStream, fileCommentLen);
 
