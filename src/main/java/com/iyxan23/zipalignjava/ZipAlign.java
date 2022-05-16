@@ -1,11 +1,12 @@
 package com.iyxan23.zipalignjava;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 
 public class ZipAlign {
     /**
@@ -21,7 +22,6 @@ public class ZipAlign {
         ArrayList<Integer> fileOffsets = new ArrayList<>();
 
         // todo: handle zip64 asdjlkajdoijdlkasjd
-        // todo: test!?
 
         // source: https://en.wikipedia.org/wiki/ZIP_(file_format)#Structure
         // better source: https://users.cs.jmu.edu/buchhofp/forensics/formats/pkzip.html
@@ -31,7 +31,6 @@ public class ZipAlign {
 
         // starts with local file header signature
         while (header == 0x04034b50) {
-            System.out.println("at file " + outStream.bytesWritten());
             fileOffsets.add(outStream.bytesWritten());
             outStream.writeInt(0x04034b50);
 
@@ -120,8 +119,6 @@ public class ZipAlign {
                     byteBuffer.put(cur);
                 }
             } while (byteBuffer.getInt(0) != 0x08074b50);
-
-            System.out.println("found data descriptor at " + outStream.bytesWritten());
 
             // we skip all the data descriptor lol, we don't need it
             passBytes(inBuffer, outStream, 12);
