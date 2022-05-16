@@ -1,6 +1,9 @@
 package com.iyxan23.zipalignjava;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 public class ZipAlign {
@@ -10,8 +13,10 @@ public class ZipAlign {
      * @param zipOut The zip output stream
      */
     public static void alignZip(InputStream zipIn, OutputStream zipOut) throws IOException {
-        DataInputStream stream = new DataInputStream(zipIn);
-        CountingWrapper outStream = new CountingWrapper(zipOut);
+        ByteBuffer inBuffer = ByteBuffer.wrap(readAll(zipIn));
+        // zip's file format is little endian
+        inBuffer.order(ByteOrder.LITTLE_ENDIAN);
+        LittleEndianOutputStream outStream = new LittleEndianOutputStream(zipOut);
         ArrayList<Integer> fileOffsets = new ArrayList<>();
 
         // todo: handle zip64 asdjlkajdoijdlkasjd
@@ -21,32 +26,33 @@ public class ZipAlign {
         // better source: https://users.cs.jmu.edu/buchhofp/forensics/formats/pkzip.html
 
         // starts with local header signature
-        while (stream.readInt() == 0x504b0304) {
-            fileOffsets.add(outStream.bytesPosition);
-            outStream.writeInt(0x504b0304);
+        while (inBuffer.getInt() == 0x04034b50) {
+            fileOffsets.add(outStream.bytesWritten());
+            outStream.writeInt(0x04034b50);
 
-            passBytes(stream, outStream, 4);
+            passBytes(inBuffer, outStream, 4);
 
-            short compressionMethod = stream.readShort();
+            short compressionMethod = inBuffer.getShort();
             outStream.writeShort(compressionMethod);
             // 0 is when there is no compression done
             boolean shouldAlign = compressionMethod == 0;
 
-            passBytes(stream, outStream, 8);
+            passBytes(inBuffer, outStream, 8);
 
-            int compressedSize = stream.readInt();
+            int compressedSize = inBuffer.getInt();
             outStream.writeInt(compressedSize);
-            passBytes(stream, outStream, 4);
+            passBytes(inBuffer, outStream, 4);
 
-            short fileNameLen = stream.readShort();
+            short fileNameLen = inBuffer.getShort();
             outStream.writeShort(fileNameLen);
 
-            short extraFieldLen = stream.readShort();
+            short extraFieldLen = inBuffer.getShort();
 
             // we're going to extend this extra field (if the data is uncompressed) so that the data will align into
             // 4-byte boundaries
-            int dataStartPoint = outStream.bytesPosition + 2 + fileNameLen + extraFieldLen;
-            int paddingSize = dataStartPoint % 4;
+            int dataStartPoint = outStream.bytesWritten() + 2 + fileNameLen + extraFieldLen;
+            int wrongOffset = dataStartPoint % 4;
+            int paddingSize = wrongOffset == 0 ? 0 : 4 - wrongOffset;
 
             if (shouldAlign) {
                 outStream.writeShort(extraFieldLen + paddingSize);
@@ -54,8 +60,8 @@ public class ZipAlign {
                 outStream.writeShort(extraFieldLen);
             }
 
-            passBytes(stream, outStream, fileNameLen);
-            passBytes(stream, outStream, extraFieldLen);
+            passBytes(inBuffer, outStream, fileNameLen);
+            passBytes(inBuffer, outStream, extraFieldLen);
 
             if (shouldAlign && paddingSize != 0) {
                 // pad the extra field with null bytes
@@ -64,102 +70,88 @@ public class ZipAlign {
             }
 
             // pass all the data
-            passBytes(stream, outStream, compressedSize);
+            passBytes(inBuffer, outStream, compressedSize);
+
+            outStream.flush();
         }
 
-        int centralDirectoryPosition = outStream.bytesPosition - 4;
+        int centralDirectoryPosition = outStream.bytesWritten() - 4;
+        int fileOffsetIndex = 0;
+
+        System.out.println("central dir pos: " + centralDirectoryPosition);
 
         // we're at the central directory
-        for (int fileOffset : fileOffsets) {
-            passBytes(stream, outStream, 24);
+        do {
+            outStream.writeInt(0x02014b50);
+            int fileOffset = fileOffsets.get(fileOffsetIndex);
 
-            short fileNameLen = stream.readShort();
+            System.out.println("doing " + fileOffset);
+            passBytes(inBuffer, outStream, 24);
+
+            short fileNameLen = inBuffer.getShort();
             outStream.writeShort(fileNameLen);
 
-            short extraFieldLen = stream.readShort();
+            short extraFieldLen = inBuffer.getShort();
             outStream.writeShort(extraFieldLen);
 
-            short fileCommentLen = stream.readShort();
+            short fileCommentLen = inBuffer.getShort();
             outStream.writeShort(fileCommentLen);
 
-            passBytes(stream, outStream, 8);
+            passBytes(inBuffer, outStream, 8);
 
             // offset of local header
-            stream.readInt();
+            int offset = inBuffer.getInt();
+            System.out.println("original offset: " + offset + ", new offset: " + fileOffset);
             outStream.writeInt(fileOffset);
 
-            passBytes(stream, outStream, fileNameLen);
-            passBytes(stream, outStream, extraFieldLen);
-            passBytes(stream, outStream, fileCommentLen);
+            byte[] fileName = new byte[fileNameLen];
+            inBuffer.get(fileName);
 
-            if (stream.readInt() != 0x504b0102)
-                throw new IOException("central directory file header signature doesn't align");
-        }
+            System.out.println("filename: " + new String(fileName, StandardCharsets.UTF_8));
+
+            outStream.write(fileName);
+            passBytes(inBuffer, outStream, extraFieldLen);
+            passBytes(inBuffer, outStream, fileCommentLen);
+
+            outStream.flush();
+            fileOffsetIndex++;
+
+        } while (inBuffer.getInt() == 0x02014b50);
 
         // end of central directory record
-        passBytes(stream, outStream, 12);
+        outStream.writeInt(0x06054b50);
+        passBytes(inBuffer, outStream, 12);
 
         // offset of where central directory starts
-        stream.readInt();
+        inBuffer.getInt();
         outStream.writeInt(centralDirectoryPosition);
 
-        short commentLen = stream.readShort();
+        short commentLen = inBuffer.getShort();
         outStream.writeShort(commentLen);
 
-        passBytes(stream, outStream, commentLen);
+        passBytes(inBuffer, outStream, commentLen);
     }
 
     /**
-     * Passes a specified length of bytes from the input to the output
-     * @param in The input stream
+     * Passes a specified length of bytes from a ByteBuffer to an output stream
+     * @param in The byte buffer
      * @param out The output stream
      * @param len The length of how many bytes to be passed
      */
-    private static void passBytes(InputStream in, OutputStream out, int len) throws IOException {
+    private static void passBytes(ByteBuffer in, OutputStream out, int len) throws IOException {
         byte[] data = new byte[len];
-        if (in.read(data) == -1) throw new IOException("End of stream");
+        in.get(data);
         out.write(data);
     }
 
-    /**
-     * A simple class that wraps around an `OutputStream` that will count how many bytes that has been written to the
-     * stream.
-     *
-     * I don't think this is a good idea, but should work fine.
-     */
-    private static class CountingWrapper extends DataOutputStream {
-        private int bytesPosition = 0;
+    private static byte[] readAll(InputStream in) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
 
-        public CountingWrapper(OutputStream source) {
-            super(source);
+        byte[] buffer = new byte[1024];
+        while (in.read(buffer) != -1) {
+            output.write(buffer);
         }
 
-        @Override
-        public void write(int i) throws IOException {
-            bytesPosition += 1;
-            super.write(i);
-        }
-
-        @Override
-        public void write(byte[] bytes) throws IOException {
-            bytesPosition += bytes.length;
-            super.write(bytes);
-        }
-
-        @Override
-        public void write(byte[] bytes, int i, int i1) throws IOException {
-            bytesPosition += bytes.length;
-            super.write(bytes, i ,i1);
-        }
-
-        @Override
-        public void flush() throws IOException {
-            super.flush();
-        }
-
-        @Override
-        public void close() throws IOException {
-            super.close();
-        }
+        return output.toByteArray();
     }
 }
