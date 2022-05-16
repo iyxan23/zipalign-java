@@ -75,7 +75,7 @@ public class ZipAlign {
             outStream.flush();
         }
 
-        int centralDirectoryPosition = outStream.bytesWritten() - 4;
+        int centralDirectoryPosition = outStream.bytesWritten();
         int fileOffsetIndex = 0;
 
         // we're at the central directory
