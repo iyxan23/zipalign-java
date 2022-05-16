@@ -1,6 +1,8 @@
 package com.iyxan23.zipalignjava;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 
 public class Main {
     public static void main(String[] args) throws IOException {
@@ -16,10 +18,16 @@ public class Main {
 
         if (!inZip.exists()) {
             System.err.println("Input file doesn't exist: " + inZip.getPath());
+            System.exit(1);
+        }
+
+        if (inZip.isDirectory()) {
+            System.err.println("Input path must be of a file: " + inZip.getPath());
+            System.exit(1);
         }
 
         if (!outZip.createNewFile()) {
-            System.err.println("File already exists: " + outZip.getPath());
+            System.err.println("Output file already exists: " + outZip.getPath());
             System.exit(1);
         }
 
@@ -29,8 +37,6 @@ public class Main {
                 ZipAlign.alignZip(in, out);
                 System.out.println("Zip successfully aligned");
             }
-        } catch (FileNotFoundException e) {
-            System.err.println("File not found: " + inZip);
         }
     }
 }
