@@ -3,11 +3,10 @@
  *
  * Copyright 1998, 1999 Elliotte Rusty Harold
  *
- * Original package: com.macfaq.io.LittleEndianOutputStream
  * Copied from: http://www.cafeaulait.org/books/javaio/ioexamples/07/LittleEndianOutputStream.java
  */
 
-package com.iyxan23.zipalignjava;
+package com.macfaq.io;
 
 import java.io.*;
 

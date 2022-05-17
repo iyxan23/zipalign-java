@@ -1,6 +1,8 @@
 package com.iyxan23.zipalignjava;
 
-import java.io.ByteArrayOutputStream;
+import com.macfaq.io.LittleEndianInputStream;
+import com.macfaq.io.LittleEndianOutputStream;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -51,11 +53,8 @@ public class ZipAlign {
      * @see ZipAlign#alignZip(InputStream, OutputStream)
      */
     public static void alignZip(InputStream zipIn, OutputStream zipOut, int alignment) throws IOException {
-        ByteBuffer inBuffer = ByteBuffer.wrap(readAll(zipIn));
-        // zip's file format is little endian
-        inBuffer.order(ByteOrder.LITTLE_ENDIAN);
-
-        LittleEndianOutputStream outStream = new LittleEndianOutputStream(zipOut);
+        LittleEndianInputStream in = new LittleEndianInputStream(zipIn);
+        LittleEndianOutputStream out = new LittleEndianOutputStream(zipOut);
         ArrayList<Integer> fileOffsets = new ArrayList<>();
 
         // todo: handle zip64 asdjlkajdoijdlkasjd
@@ -64,64 +63,64 @@ public class ZipAlign {
         // better source: https://users.cs.jmu.edu/buchhofp/forensics/formats/pkzip.html
         // the real source: https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
 
-        int header = inBuffer.getInt();
+        int header = in.readInt();
 
         // starts with local file header signature
         while (header == 0x04034b50) {
-            fileOffsets.add(outStream.bytesWritten());
-            outStream.writeInt(0x04034b50);
+            fileOffsets.add(out.bytesWritten());
+            out.writeInt(0x04034b50);
 
-            passBytes(inBuffer, outStream, 2);
+            passBytes(in, out, 2);
 
-            short generalPurposeFlag = inBuffer.getShort();
-            outStream.writeShort(generalPurposeFlag);
+            short generalPurposeFlag = in.readShort();
+            out.writeShort(generalPurposeFlag);
 
             // data descriptor is used if the 3rd bit is 1
             boolean hasDataDescriptor = (generalPurposeFlag & 0x8) == 0x8;
 
-            short compressionMethod = inBuffer.getShort();
-            outStream.writeShort(compressionMethod);
+            short compressionMethod = in.readShort();
+            out.writeShort(compressionMethod);
             // 0 is when there is no compression done
             boolean shouldAlign = compressionMethod == 0;
 
-            passBytes(inBuffer, outStream, 8);
+            passBytes(in, out, 8);
 
-            int compressedSize = inBuffer.getInt();
-            outStream.writeInt(compressedSize);
-            passBytes(inBuffer, outStream, 4);
+            int compressedSize = in.readInt();
+            out.writeInt(compressedSize);
+            passBytes(in, out, 4);
 
-            short fileNameLen = inBuffer.getShort();
-            outStream.writeShort(fileNameLen);
+            short fileNameLen = in.readShort();
+            out.writeShort(fileNameLen);
 
-            short extraFieldLen = inBuffer.getShort();
+            short extraFieldLen = in.readShort();
 
             // we're going to extend this extra field (if the data is uncompressed) so that the data will align into
             // the specified alignment boundaries (usually 4 bytes)
-            int dataStartPoint = outStream.bytesWritten() + 2 + fileNameLen + extraFieldLen;
+            int dataStartPoint = out.bytesWritten() + 2 + fileNameLen + extraFieldLen;
             int wrongOffset = dataStartPoint % alignment;
             int paddingSize = wrongOffset == 0 ? 0 : alignment - wrongOffset;
 
             if (shouldAlign) {
-                outStream.writeShort(extraFieldLen + paddingSize);
+                out.writeShort(extraFieldLen + paddingSize);
             } else {
-                outStream.writeShort(extraFieldLen);
+                out.writeShort(extraFieldLen);
             }
 
-            passBytes(inBuffer, outStream, fileNameLen);
-            passBytes(inBuffer, outStream, extraFieldLen);
+            passBytes(in, out, fileNameLen);
+            passBytes(in, out, extraFieldLen);
 
             if (shouldAlign && paddingSize != 0) {
                 // pad the extra field with null bytes
                 byte[] padding = new byte[paddingSize];
-                outStream.write(padding);
+                out.write(padding);
             }
 
             // if there isn't any data descriptor we can just pass the data right away
             if (!hasDataDescriptor) {
-                passBytes(inBuffer, outStream, compressedSize);
+                passBytes(in, out, compressedSize);
 
-                outStream.flush();
-                header = inBuffer.getInt();
+                out.flush();
+                header = in.readInt();
 
                 continue;
             }
@@ -138,8 +137,8 @@ public class ZipAlign {
             // loop until we stumble upon 0x08074b50
             byte cur;
             do {
-                cur = inBuffer.get();
-                outStream.write(cur);
+                cur = in.readByte();
+                out.write(cur);
 
                 if (byteBuffer.position() == buffer.length - 1) {
                     // the buffer is full, so we shift all of it to the left
@@ -154,93 +153,78 @@ public class ZipAlign {
             } while (byteBuffer.getInt(0) != 0x08074b50);
 
             // we skip all the data descriptor lol, we don't need it
-            passBytes(inBuffer, outStream, 12);
+            passBytes(in, out, 12);
 
-            outStream.flush();
+            out.flush();
 
             // todo: zip64
-            // if (zip64) passBytes(inBuffer, outStream, 20);
+            // if (zip64) passBytes(in, outStream, 20);
 
             // next should be a new header
-            header = inBuffer.getInt();
+            header = in.readInt();
         }
 
-        int centralDirectoryPosition = outStream.bytesWritten();
+        int centralDirectoryPosition = out.bytesWritten();
         int fileOffsetIndex = 0;
 
         // we're at the central directory
         while (header == 0x02014b50) {
-            outStream.writeInt(0x02014b50);
+            out.writeInt(0x02014b50);
             int fileOffset = fileOffsets.get(fileOffsetIndex);
 
-            passBytes(inBuffer, outStream, 24);
+            passBytes(in, out, 24);
 
-            short fileNameLen = inBuffer.getShort();
-            outStream.writeShort(fileNameLen);
+            short fileNameLen = in.readShort();
+            out.writeShort(fileNameLen);
 
-            short extraFieldLen = inBuffer.getShort();
-            outStream.writeShort(extraFieldLen);
+            short extraFieldLen = in.readShort();
+            out.writeShort(extraFieldLen);
 
-            short fileCommentLen = inBuffer.getShort();
-            outStream.writeShort(fileCommentLen);
+            short fileCommentLen = in.readShort();
+            out.writeShort(fileCommentLen);
 
-            passBytes(inBuffer, outStream, 8);
+            passBytes(in, out, 8);
 
             // offset of local header
-            inBuffer.getInt();
-            outStream.writeInt(fileOffset);
+            in.readInt();
+            out.writeInt(fileOffset);
 
-            byte[] fileName = new byte[fileNameLen];
+            passBytes(in, out, fileNameLen);
+            passBytes(in, out, extraFieldLen);
+            passBytes(in, out, fileCommentLen);
 
-            inBuffer.get(fileName);
-            outStream.write(fileName);
-
-            passBytes(inBuffer, outStream, extraFieldLen);
-            passBytes(inBuffer, outStream, fileCommentLen);
-
-            outStream.flush();
+            out.flush();
             fileOffsetIndex++;
 
-            header = inBuffer.getInt();
+            header = in.readInt();
         }
 
         if (header != 0x06054b50)
             throw new IOException("No end of central directory record header, there is something wrong");
 
         // end of central directory record
-        outStream.writeInt(0x06054b50);
-        passBytes(inBuffer, outStream, 12);
+        out.writeInt(0x06054b50);
+        passBytes(in, out, 12);
 
         // offset of where central directory starts
-        inBuffer.getInt();
-        outStream.writeInt(centralDirectoryPosition);
+        in.readInt();
+        out.writeInt(centralDirectoryPosition);
 
-        short commentLen = inBuffer.getShort();
-        outStream.writeShort(commentLen);
+        short commentLen = in.readShort();
+        out.writeShort(commentLen);
 
-        passBytes(inBuffer, outStream, commentLen);
+        passBytes(in, out, commentLen);
     }
 
     /**
-     * Passes a specified length of bytes from a ByteBuffer to an output stream
-     * @param in The byte buffer
+     * Passes a specified length of bytes from an {@link InputStream} to an {@link OutputStream}
+     * @param in The input stream
      * @param out The output stream
      * @param len The length of how many bytes to be passed
      */
-    private static void passBytes(ByteBuffer in, OutputStream out, int len) throws IOException {
+    private static void passBytes(InputStream in, OutputStream out, int len) throws IOException {
         byte[] data = new byte[len];
-        in.get(data);
+        if (in.read(data) == -1) throw new IOException("Reached EOF when passing bytes");
         out.write(data);
-    }
-
-    private static byte[] readAll(InputStream in) throws IOException {
-        ByteArrayOutputStream output = new ByteArrayOutputStream();
-
-        byte[] buffer = new byte[1024];
-        while (in.read(buffer) != -1) {
-            output.write(buffer);
-        }
-
-        return output.toByteArray();
     }
 }
