@@ -6,6 +6,7 @@ import com.macfaq.io.LittleEndianOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -214,6 +215,150 @@ public class ZipAlign {
         out.writeShort(commentLen);
 
         passBytes(in, out, commentLen);
+    }
+
+    // https://cs.android.com/android/platform/superproject/+/master:build/make/tools/zipalign/ZipFile.h;drc=73d5b22b83523635501921ca57fb9090b48a58b9;bpv=0;bpt=1;l=202
+    private static final int maxEOCDLookup = 0xffff + 22;
+
+    public static void alignZip(RandomAccessFile file, OutputStream out) throws IOException, InvalidZipException {
+        // find the end of central directory
+        long seekStart;
+        int readAmount;
+        final long fileLength = file.length();
+
+        if (fileLength > maxEOCDLookup) {
+            seekStart = fileLength - maxEOCDLookup;
+            readAmount = maxEOCDLookup;
+        } else {
+            seekStart = 0;
+            readAmount = (int) fileLength;
+        }
+
+        // find the signature
+        file.seek(seekStart);
+
+        int i;
+        for (i = readAmount - 4; i >= 0; i--) {
+            if (file.readByte() != 0x50) continue;
+            file.seek(file.getFilePointer() - 1);
+            if (file.readInt() == 0x504b0506) break; // EOCD signature (in big-endian)
+        }
+
+        if (i < 0)
+            throw new InvalidZipException("No end-of-central-directory found");
+
+        // skip disk fields
+        file.seek(file.getFilePointer() + 6);
+
+        byte[] buf = new byte[10]; // we're keeping the total entries (2B), central dir size (4B), and the offset (4B)
+        file.read(buf);
+        ByteBuffer eocdBuffer = ByteBuffer.wrap(buf)
+                .order(ByteOrder.LITTLE_ENDIAN);
+
+        // read em
+        short totalEntries = eocdBuffer.getShort();
+        int centralDirSize = eocdBuffer.getInt();
+        int centralDirOffset = eocdBuffer.getInt();
+
+        ArrayList<Alignment> neededAlignments = new ArrayList<>();
+
+        file.seek(centralDirOffset);
+        byte[] entry = new byte[42]; // not including the filename, extra field, and file comment
+        ByteBuffer entryBuffer = ByteBuffer.wrap(entry)
+                .order(ByteOrder.LITTLE_ENDIAN);
+
+        for (int ei = 0; ei < totalEntries; ei++) {
+            final long entryStart = file.getFilePointer();
+            file.read(entry);
+
+            if (entryBuffer.getInt(0) != 0x02014b50)
+                throw new InvalidZipException(
+                    "assumed central directory entry at " + entryStart + " doesn't start with a signature"
+                );
+
+            short entry_fileNameLen = entryBuffer.getShort(28);
+            short entry_extraFieldLen = entryBuffer.getShort(30);
+            short entry_commentLen = entryBuffer.getShort(32);
+
+            // if this file is uncompressed, we align it
+            if ((entryBuffer.getShort(10) & 0x8) == 0x8) {
+                int fileOffset = entryBuffer.getInt(42);
+
+                // temporarily seek to the file header to calculate the alignment amount
+                file.seek(fileOffset + 26); // skip all fields before filename length
+
+                // read the filename & extra field length
+                ByteBuffer lengths = ByteBuffer.allocateDirect(4).order(ByteOrder.LITTLE_ENDIAN);
+                file.read(lengths.array());
+                short fileNameLen = lengths.getShort();
+                short extraFieldLen = lengths.getShort();
+
+                // calculate the amount of alignment needed
+                short wrongOffset = (short) ((fileOffset + 30 + fileNameLen + extraFieldLen) % 4);
+                short alignAmount = wrongOffset == 0 ? 0 : (short) (4 - wrongOffset);
+
+                // push it!
+                neededAlignments.add(new Alignment(
+                        alignAmount,
+                        fileOffset + 28,
+                        (short) (extraFieldLen + alignAmount),
+                        fileOffset + 30 + fileNameLen + extraFieldLen
+                ));
+
+                file.seek(entryStart + 42); // go back to our prev location
+            }
+
+            file.seek(file.getFilePointer() + entry_fileNameLen + entry_extraFieldLen + entry_commentLen);
+        }
+
+        // done analyzing! now we're going to stream the aligned zip
+        file.seek(0);
+        if (neededAlignments.size() == 0) {
+            // there is no needed alignment, stream it all!
+            byte[] buffer = new byte[8192];
+            while (file.read(buffer) != -1) out.write(buffer);
+            return;
+        }
+
+        // alignments needed!
+        long prevOffset = 0;
+        for (Alignment al : neededAlignments) {
+            if (al.extraFieldLenOffset != 0) {
+                // todo: chunk these into smaller buffers
+                byte[] buffer = new byte[(int) (al.extraFieldLenOffset - prevOffset)];
+
+                file.read(buffer);
+                out.write(buffer);
+            }
+
+            // write the extra field
+            out.write(al.extraFieldLenValue);
+            file.seek(file.getFilePointer() + 2); // mirror the new position to the file
+
+            byte[] buffer = new byte[(int) (al.extraFieldExtensionOffset - al.extraFieldLenOffset)];
+            file.read(buffer);
+            out.write(buffer);
+
+            byte[] padding = new byte[al.alignAmount];
+            out.write(padding); // sneak in null bytes
+
+            prevOffset = file.getFilePointer();
+        }
+    }
+
+    private static class Alignment {
+        public short alignAmount;
+        public long extraFieldLenOffset;
+        public short extraFieldLenValue;
+        public long extraFieldExtensionOffset;
+
+        public Alignment(short alignAmount, long extraFieldLenOffset, short extraFieldLenValue,
+                         long extraFieldExtensionOffset) {
+            this.alignAmount = alignAmount;
+            this.extraFieldLenOffset = extraFieldLenOffset;
+            this.extraFieldLenValue = extraFieldLenValue;
+            this.extraFieldExtensionOffset = extraFieldExtensionOffset;
+        }
     }
 
     /**
