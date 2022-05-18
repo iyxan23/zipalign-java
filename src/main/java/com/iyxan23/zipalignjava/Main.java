@@ -1,13 +1,11 @@
 package com.iyxan23.zipalignjava;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
+import java.util.Objects;
 
 public class Main {
     public static void main(String[] args) throws IOException {
-        if (args.length != 2) {
+        if (args.length < 2) {
             System.err.println(
                 "Usage:\n\t<exec> <input zip> <output zip>\n\nExample:\n\tjava -jar zipalign.jar input.zip output.zip"
             );
@@ -16,6 +14,7 @@ public class Main {
 
         File inZip = new File(args[0]);
         File outZip = new File(args[1]);
+        boolean useOldMethod = args.length >= 3 && Objects.equals(args[2], "old");
 
         if (!inZip.exists()) {
             System.err.println("Input file doesn't exist: " + inZip.getPath());
@@ -32,12 +31,25 @@ public class Main {
             System.exit(1);
         }
 
-        try (FileInputStream in = new FileInputStream(inZip)) {
-            try (FileOutputStream out = new FileOutputStream(outZip)) {
-                System.out.println("Aligning zip");
-                ZipAlign.alignZip(in, out);
-                System.out.println("Zip successfully aligned");
+        System.out.println("Aligning zip " + inZip);
+        long start = System.currentTimeMillis();
+
+        if (useOldMethod) {
+            try (FileInputStream in = new FileInputStream(inZip)) {
+                try (FileOutputStream out = new FileOutputStream(outZip)) {
+                    ZipAlign.alignZip(in, out);
+                }
+            }
+        } else {
+            try (RandomAccessFile raf = new RandomAccessFile(inZip, "r")) {
+                try (FileOutputStream zipOut = new FileOutputStream(outZip)) {
+                    ZipAlign.alignZip(raf, zipOut);
+                } catch (InvalidZipException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
+
+        System.out.println("Zip aligned successfully, took " + (System.currentTimeMillis() - start) + "ms");
     }
 }
