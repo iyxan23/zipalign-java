@@ -3,13 +3,11 @@ package com.iyxan23.zipalignjava;
 import com.macfaq.io.LittleEndianInputStream;
 import com.macfaq.io.LittleEndianOutputStream;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class ZipAlign {
     /**
@@ -262,8 +260,12 @@ public class ZipAlign {
 
         ArrayList<Alignment> neededAlignments = new ArrayList<>();
 
+        // to keep track of how many bytes we've shifted through the whole file (because we're going to pad null bytes
+        // to align)
+        short shiftAmount = 0;
+
         file.seek(centralDirOffset);
-        byte[] entry = new byte[42]; // not including the filename, extra field, and file comment
+        byte[] entry = new byte[46]; // not including the filename, extra field, and file comment
         ByteBuffer entryBuffer = ByteBuffer.wrap(entry)
                 .order(ByteOrder.LITTLE_ENDIAN);
 
@@ -281,31 +283,35 @@ public class ZipAlign {
             short entry_commentLen = entryBuffer.getShort(32);
 
             // if this file is uncompressed, we align it
-            if ((entryBuffer.getShort(10) & 0x8) == 0x8) {
+            if (entryBuffer.getShort(10) == 0) {
                 int fileOffset = entryBuffer.getInt(42);
 
                 // temporarily seek to the file header to calculate the alignment amount
                 file.seek(fileOffset + 26); // skip all fields before filename length
 
                 // read the filename & extra field length
-                ByteBuffer lengths = ByteBuffer.allocateDirect(4).order(ByteOrder.LITTLE_ENDIAN);
+                ByteBuffer lengths = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
                 file.read(lengths.array());
                 short fileNameLen = lengths.getShort();
                 short extraFieldLen = lengths.getShort();
 
                 // calculate the amount of alignment needed
-                short wrongOffset = (short) ((fileOffset + 30 + fileNameLen + extraFieldLen) % 4);
+                long dataPos = fileOffset + 30 + fileNameLen + extraFieldLen + shiftAmount;
+                short wrongOffset = (short) (dataPos % 4);
                 short alignAmount = wrongOffset == 0 ? 0 : (short) (4 - wrongOffset);
+                shiftAmount += alignAmount;
+
+                System.out.println(entryStart + " needs alignment " + alignAmount + " wrongoff: " + wrongOffset + " data pos: " + dataPos);
 
                 // push it!
                 neededAlignments.add(new Alignment(
                         alignAmount,
                         fileOffset + 28,
                         (short) (extraFieldLen + alignAmount),
-                        fileOffset + 30 + fileNameLen + extraFieldLen
+                        fileNameLen + extraFieldLen
                 ));
 
-                file.seek(entryStart + 42); // go back to our prev location
+                file.seek(entryStart + 46); // go back to our prev location
             }
 
             file.seek(file.getFilePointer() + entry_fileNameLen + entry_extraFieldLen + entry_commentLen);
@@ -321,44 +327,71 @@ public class ZipAlign {
         }
 
         // alignments needed!
-        long prevOffset = 0;
         for (Alignment al : neededAlignments) {
+            System.out.println("doing alignment: " + al);
             if (al.extraFieldLenOffset != 0) {
-                // todo: chunk these into smaller buffers
-                byte[] buffer = new byte[(int) (al.extraFieldLenOffset - prevOffset)];
-
-                file.read(buffer);
-                out.write(buffer);
+                passBytes(file, out, al.extraFieldLenOffset - file.getFilePointer());
             }
 
-            // write the extra field
-            out.write(al.extraFieldLenValue);
-            file.seek(file.getFilePointer() + 2); // mirror the new position to the file
+            // write the extra field (in little-endian)
+            out.write(al.extraFieldLenValue & 0xFF);
+            out.write((al.extraFieldLenValue >>> 8) & 0xFF);
+            file.readShort(); // mirror the new position to the file
 
-            byte[] buffer = new byte[(int) (al.extraFieldExtensionOffset - al.extraFieldLenOffset)];
-            file.read(buffer);
-            out.write(buffer);
+            passBytes(file, out, al.extraFieldExtensionOffset);
 
             byte[] padding = new byte[al.alignAmount];
             out.write(padding); // sneak in null bytes
-
-            prevOffset = file.getFilePointer();
+            out.flush();
         }
+
+        // write all that's left
+        passBytes(file, out, file.length() - file.getFilePointer());
+
+        // todo: change the file offsets in central directories because they changed
     }
 
     private static class Alignment {
         public short alignAmount;
         public long extraFieldLenOffset;
         public short extraFieldLenValue;
-        public long extraFieldExtensionOffset;
+        public int extraFieldExtensionOffset;
 
         public Alignment(short alignAmount, long extraFieldLenOffset, short extraFieldLenValue,
-                         long extraFieldExtensionOffset) {
+                         int extraFieldExtensionOffset) {
             this.alignAmount = alignAmount;
             this.extraFieldLenOffset = extraFieldLenOffset;
             this.extraFieldLenValue = extraFieldLenValue;
             this.extraFieldExtensionOffset = extraFieldExtensionOffset;
         }
+
+        @Override
+        public String toString() {
+            return "Alignment{" +
+                    "alignAmount=" + alignAmount +
+                    ", extraFieldLenOffset=" + extraFieldLenOffset +
+                    ", extraFieldLenValue=" + extraFieldLenValue +
+                    ", extraFieldExtensionOffset=" + extraFieldExtensionOffset +
+                    '}';
+        }
+    }
+
+    private static void passBytes(RandomAccessFile raf, OutputStream out, long len) throws IOException {
+        byte[] buffer = new byte[8162];
+
+        long left;
+        for (left = len; left > 8162; left -= 8162) {
+            raf.read(buffer);
+            out.write(buffer);
+        }
+
+        if (left != 0) {
+            buffer = new byte[(int) left];
+            raf.read(buffer);
+            out.write(buffer);
+        }
+
+        out.flush();
     }
 
     /**
