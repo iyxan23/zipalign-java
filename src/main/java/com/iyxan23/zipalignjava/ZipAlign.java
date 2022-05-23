@@ -245,10 +245,10 @@ public class ZipAlign {
         if (i < 0)
             throw new InvalidZipException("No end-of-central-directory found");
 
-        long eocdPosition = file.getFilePointer();
+        long eocdPosition = file.getFilePointer() - 4;
 
         // skip disk fields
-        file.seek(eocdPosition + 6);
+        file.seek(eocdPosition + 10);
 
         byte[] buf = new byte[10]; // we're keeping the total entries (2B), central dir size (4B), and the offset (4B)
         file.read(buf);
@@ -308,8 +308,6 @@ public class ZipAlign {
 
                 // only align when alignAmount is not 0 (not already aligned)
                 if (alignAmount != 0) {
-                    System.out.println(fileOffset + " needs alignment " + alignAmount + " wrongoff: " + wrongOffset + " data pos: " + dataPos);
-
                     // push it!
                     neededAlignments.add(new Alignment(
                             alignAmount,
@@ -336,7 +334,6 @@ public class ZipAlign {
 
         // alignments needed! this aligns files to the defined boundaries by padding null bytes to the extra field
         for (Alignment al : neededAlignments) {
-            System.out.println("doing alignment: " + al);
             if (al.extraFieldLenOffset != 0) {
                 passBytes(file, out, al.extraFieldLenOffset - file.getFilePointer());
             }
@@ -358,8 +355,6 @@ public class ZipAlign {
 
         // this changes the "file offset" defined in EOCD headers
         for (FileOffsetShift shift : shifts) {
-            System.out.println("writing shifted file offset at eocdh, pos: " + shift.eocdhPosition + ", val: " + shift.shiftedFileOffset);
-
             // write data before this
             passBytes(file, out, shift.eocdhPosition - file.getFilePointer());
 
@@ -371,12 +366,9 @@ public class ZipAlign {
             file.readInt(); // mirror the new position to the file
         }
 
-        System.out.println("editing eocdr's eocdh start offset at pos: " + (eocdPosition + 0xf));
-
         // after that we need to edit the EOCDR's "EOCDH start offset" field
-        passBytes(file, out, eocdPosition + 0xf - file.getFilePointer());
+        passBytes(file, out, eocdPosition + 0x10 - file.getFilePointer());
         int shiftedCDOffset = centralDirOffset + shiftAmount;
-        System.out.println("shifted start of central dir offset: " + shiftedCDOffset);
 
         out.write(shiftedCDOffset & 0xFF);
         out.write((shiftedCDOffset >>> 8) & 0xFF);
@@ -384,7 +376,6 @@ public class ZipAlign {
         out.write((shiftedCDOffset >>> 24) & 0xFF);
         file.readInt(); // mirror the new position change
 
-        System.out.println("writing all that's left");
         // write all that's left
         passBytes(file, out, file.length() - file.getFilePointer());
     }
