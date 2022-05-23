@@ -245,8 +245,10 @@ public class ZipAlign {
         if (i < 0)
             throw new InvalidZipException("No end-of-central-directory found");
 
+        long eocdPosition = file.getFilePointer();
+
         // skip disk fields
-        file.seek(file.getFilePointer() + 6);
+        file.seek(eocdPosition + 6);
 
         byte[] buf = new byte[10]; // we're keeping the total entries (2B), central dir size (4B), and the offset (4B)
         file.read(buf);
@@ -259,6 +261,7 @@ public class ZipAlign {
         int centralDirOffset = eocdBuffer.getInt();
 
         ArrayList<Alignment> neededAlignments = new ArrayList<>();
+        ArrayList<FileOffsetShift> shifts = new ArrayList<>();
 
         // to keep track of how many bytes we've shifted through the whole file (because we're going to pad null bytes
         // to align)
@@ -281,11 +284,12 @@ public class ZipAlign {
             short entry_fileNameLen = entryBuffer.getShort(28);
             short entry_extraFieldLen = entryBuffer.getShort(30);
             short entry_commentLen = entryBuffer.getShort(32);
+            int fileOffset = entryBuffer.getInt(42);
+
+            shifts.add(new FileOffsetShift(entryStart + 39, fileOffset + shiftAmount));
 
             // if this file is uncompressed, we align it
             if (entryBuffer.getShort(10) == 0) {
-                int fileOffset = entryBuffer.getInt(42);
-
                 // temporarily seek to the file header to calculate the alignment amount
                 file.seek(fileOffset + 26); // skip all fields before filename length
 
@@ -326,14 +330,14 @@ public class ZipAlign {
             return;
         }
 
-        // alignments needed!
+        // alignments needed! this aligns files to the defined boundaries by padding null bytes to the extra field
         for (Alignment al : neededAlignments) {
             System.out.println("doing alignment: " + al);
             if (al.extraFieldLenOffset != 0) {
                 passBytes(file, out, al.extraFieldLenOffset - file.getFilePointer());
             }
 
-            // write the extra field (in little-endian)
+            // write the changed extra field length (in little-endian)
             out.write(al.extraFieldLenValue & 0xFF);
             out.write((al.extraFieldLenValue >>> 8) & 0xFF);
             file.readShort(); // mirror the new position to the file
@@ -345,10 +349,40 @@ public class ZipAlign {
             out.flush();
         }
 
+        // the code below overrides the bytes that reference to other parts of the file that may be shifted
+        // due to the fact that we're padding bytes to align uncompressed data
+
+        // this changes the "file offset" defined in EOCD headers
+        for (FileOffsetShift shift : shifts) {
+            System.out.println("writing shifted file offset at eocdh, pos: " + shift.eocdhPosition + ", val: " + shift.shiftedFileOffset);
+
+            // write data before this
+            passBytes(file, out, shift.eocdhPosition - file.getFilePointer());
+
+            // write shifted file offset (in litte-endian)
+            out.write(shift.shiftedFileOffset & 0xFF);
+            out.write((shift.shiftedFileOffset >>> 8) & 0xFF);
+            out.write((shift.shiftedFileOffset >>> 16) & 0xFF);
+            out.write((shift.shiftedFileOffset >>> 24) & 0xFF);
+            file.readInt(); // mirror the new position to the file
+        }
+
+        System.out.println("editing eocdr's eocdh start offset at pos: " + (eocdPosition + 0xf));
+
+        // after that we need to edit the EOCDR's "EOCDH start offset" field
+        passBytes(file, out, eocdPosition + 0xf - file.getFilePointer());
+        int shiftedCDOffset = centralDirOffset + shiftAmount;
+        System.out.println("shifted start of central dir offset: " + shiftedCDOffset);
+
+        out.write(shiftedCDOffset & 0xFF);
+        out.write((shiftedCDOffset >>> 8) & 0xFF);
+        out.write((shiftedCDOffset >>> 16) & 0xFF);
+        out.write((shiftedCDOffset >>> 24) & 0xFF);
+        file.readInt(); // mirror the new position change
+
+        System.out.println("writing all that's left");
         // write all that's left
         passBytes(file, out, file.length() - file.getFilePointer());
-
-        // todo: change the file offsets in central directories because they changed
     }
 
     private static class Alignment {
@@ -372,6 +406,24 @@ public class ZipAlign {
                     ", extraFieldLenOffset=" + extraFieldLenOffset +
                     ", extraFieldLenValue=" + extraFieldLenValue +
                     ", extraFieldExtensionOffset=" + extraFieldExtensionOffset +
+                    '}';
+        }
+    }
+
+    private static class FileOffsetShift {
+        public long eocdhPosition;
+        public int shiftedFileOffset;
+
+        public FileOffsetShift(long eocdhPosition, int shiftedFileOffset) {
+            this.eocdhPosition = eocdhPosition;
+            this.shiftedFileOffset = shiftedFileOffset;
+        }
+
+        @Override
+        public String toString() {
+            return "FileOffsetShift{" +
+                    "eocdhPosition=" + eocdhPosition +
+                    ", shiftedFileOffset=" + shiftedFileOffset +
                     '}';
         }
     }

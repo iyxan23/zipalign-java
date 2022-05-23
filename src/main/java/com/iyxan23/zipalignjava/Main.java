@@ -7,7 +7,7 @@ public class Main {
     public static void main(String[] args) throws IOException {
         if (args.length < 2) {
             System.err.println(
-                "Usage:\n\t<exec> <input zip> <output zip>\n\nExample:\n\tjava -jar zipalign.jar input.zip output.zip"
+                "Usage:\n\t<exec> <input zip> <output zip> (old)\n\nExample(s):\n\t$ java -jar zipalign.jar input.zip output.zip\n\n\tTo use the old method, use the \"old\" parameter:\n\n\t$ java -jar zipalign.jar input.zip output.zip old"
             );
             System.exit(1);
         }
