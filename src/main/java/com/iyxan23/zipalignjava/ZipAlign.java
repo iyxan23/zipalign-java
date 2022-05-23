@@ -286,7 +286,8 @@ public class ZipAlign {
             short entry_commentLen = entryBuffer.getShort(32);
             int fileOffset = entryBuffer.getInt(42);
 
-            shifts.add(new FileOffsetShift(entryStart + 39, fileOffset + shiftAmount));
+            if (shiftAmount != 0)
+                shifts.add(new FileOffsetShift(entryStart + 42, fileOffset + shiftAmount));
 
             // if this file is uncompressed, we align it
             if (entryBuffer.getShort(10) == 0) {
@@ -305,15 +306,18 @@ public class ZipAlign {
                 short alignAmount = wrongOffset == 0 ? 0 : (short) (4 - wrongOffset);
                 shiftAmount += alignAmount;
 
-                System.out.println(entryStart + " needs alignment " + alignAmount + " wrongoff: " + wrongOffset + " data pos: " + dataPos);
+                // only align when alignAmount is not 0 (not already aligned)
+                if (alignAmount != 0) {
+                    System.out.println(fileOffset + " needs alignment " + alignAmount + " wrongoff: " + wrongOffset + " data pos: " + dataPos);
 
-                // push it!
-                neededAlignments.add(new Alignment(
-                        alignAmount,
-                        fileOffset + 28,
-                        (short) (extraFieldLen + alignAmount),
-                        fileNameLen + extraFieldLen
-                ));
+                    // push it!
+                    neededAlignments.add(new Alignment(
+                            alignAmount,
+                            fileOffset + 28,
+                            (short) (extraFieldLen + alignAmount),
+                            fileNameLen + extraFieldLen
+                    ));
+                }
 
                 file.seek(entryStart + 46); // go back to our prev location
             }
