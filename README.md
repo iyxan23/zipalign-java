@@ -2,11 +2,37 @@
 
 [Zipalign](https://developer.android.com/studio/command-line/zipalign) implemented in java with 0 dependencies.
 
-> **Note: I haven't implemented Zip64 handling yet, this might not work on a few apks.**
+> **Note: [zip64](https://en.wikipedia.org/wiki/ZIP_(file_format)#ZIP64) is currently unsupported, this may not work on apks with the size bigger than 4GB.**
 
-## How to use it?
+## Using
 
-Either you build a jar, import the gradle module, or just copy the classes.
+It is highly recommended to use a `RandomAccessFile` as the zip input.
+```java
+import com.iyxan23.zipalignjava.ZipAlign;
+
+RandomAccessFile zipIn = new RandomAccessFile(zipPath, "r");
+FileOutputStream zipOut = ...;
+
+ZipAlign.alignZip(zipIn, zipOut);
+```
+
+or if you really needed it, you can read from an `InputStream`; this is substantially slower than using `RandomAccessFile`.
+```java
+import com.iyxan23.zipalignjava.ZipAlign;
+
+RandomAccessFile zipIn = new RandomAccessFile(zipPath, "r");
+FileOutputStream zipOut = ...;
+
+ZipAlign.alignZip(zipIn, zipOut);
+```
+
+## Importing
+
+You can use this library by importing this as a gradle module to your project, building a jar, or just by copying the classes.
+
+### Importing as a gradle module
+
+> todo
 
 ### Building a jar
 
@@ -14,40 +40,17 @@ To build a jar, run:
 ```console
 $ ./gradlew jar
 ```
-and you'll have the built jar in the `build/libs` directory.
+and you'll have a built jar in the `build/libs` directory.
 
-#### Using it as a library
-
-You can use the jar as a library and directly access the `ZipAlign` class.
-```java
-import com.iyxan23.zipalignjava.ZipAlign;
-
-FileInputStream zipIn = ...;
-FileOutputStream zipOut = ...;
-
-ZipAlign.alignZip(zipIn, zipOut);
-// hell yeah it's that easy!
+This jar contains a very simple cli that allows you to run it in your command line.
+```
+$ java -jar zipalign-java-0.1-dev.jar input.zip output.zip
 ```
 
-**NOTE**: The library doesn't do anything to verify if the zip stream given is valid; it assumes everything is valid and skims through bytes. You might need to verify the zip file first.
+## Benchmarks
 
-#### Using it as a CLI program
+> todo
 
-or just run it as a cli program:
-``` console
-$ ls
-unaligned.apk  zipalign-java-1.0.jar
-$ java -jar zipalign-java-1.0.jar unaligned.apk aligned.apk
-Aligning zip
-Zip successfully aligned
-$ ls
-aligned.apk  unaligned.apk  zipalign-java-1.0.jar
-```
-
-## Proof?
-
-![image](https://user-images.githubusercontent.com/31884435/168528933-92395c12-01ac-4f3e-a065-bf2abd97b191.png)
-
-<!-- todo: write ## How!? -->
+## How
 
 [zipalign_code]: https://cs.android.com/android/platform/superproject/+/master:build/make/tools/zipalign/ZipAlign.cpp;l=45
