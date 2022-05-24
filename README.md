@@ -16,11 +16,11 @@ FileOutputStream zipOut = ...;
 ZipAlign.alignZip(zipIn, zipOut);
 ```
 
-or if you really needed it, you can read from an `InputStream`; this is substantially slower than using `RandomAccessFile`.
+or if you really need it, you can read from an `InputStream`. Do note that this is substantially slower than using `RandomAccessFile`.
 ```java
 import com.iyxan23.zipalignjava.ZipAlign;
 
-RandomAccessFile zipIn = new RandomAccessFile(zipPath, "r");
+FileInputStream zipIn = ...;
 FileOutputStream zipOut = ...;
 
 ZipAlign.alignZip(zipIn, zipOut);
@@ -30,10 +30,6 @@ ZipAlign.alignZip(zipIn, zipOut);
 
 You can use this library by importing this as a gradle module to your project, building a jar, or just by copying the classes.
 
-### Importing as a gradle module
-
-> todo
-
 ### Building a jar
 
 To build a jar, run:
@@ -42,15 +38,20 @@ $ ./gradlew jar
 ```
 and you'll have a built jar in the `build/libs` directory.
 
-This jar contains a very simple cli that allows you to run it in your command line.
+This jar will contain a very simple cli that allows you to run it in your command line.
 ```
 $ java -jar zipalign-java-0.1-dev.jar input.zip output.zip
 ```
 
 ## Benchmarks
 
-> todo
+These benchmarks are ran on an AMD Ryzen 5-5500U CPU with IntelliJ IDEA's runner and Temurin JDK 18.
 
-## How
+```
+Function                                             Avg elapsed time   Input
+
+ZipAlign#alignZip(RandomAccessFile, OutputStream)    28ms               File from https://github.com/Iyxan23/zipalign-java/issues/1#issue-1236875761 (270K)
+ZipAlign#alignZip(InputStream, OutputStream)         497ms              -- same file --
+```
 
 [zipalign_code]: https://cs.android.com/android/platform/superproject/+/master:build/make/tools/zipalign/ZipAlign.cpp;l=45
