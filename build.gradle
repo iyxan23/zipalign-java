@@ -1,16 +1,35 @@
 plugins {
     id 'java'
+    id 'maven-publish'
 }
 
 group 'com.iyxan23'
 version '1.0.0'
 
-repositories {
-    mavenCentral()
-}
-
 // zero dependencies :)
 dependencies {}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            groupId = 'com.iyxan23'
+            artifactId = 'zipalign-java'
+            version = '1.0.0'
+
+            pom {
+                name = 'zipalign-java'
+                description = 'A zipalign implementation of java without any dependencies'
+                url = 'https://github.com/Iyxan23/zipalign-java'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/licenses/MIT'
+                    }
+                }
+            }
+        }
+    }
+}
 
 // run `./gradlew jar` to generate a runnable jar
 jar {
