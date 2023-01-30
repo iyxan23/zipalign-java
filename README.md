@@ -1,12 +1,10 @@
 <h1 align=center><pre>zipalign-java</pre></h1>
 
-[Zipalign](https://developer.android.com/studio/command-line/zipalign) implemented in java with 0 dependencies.
-
-> **Note: [zip64](https://en.wikipedia.org/wiki/ZIP_(file_format)#ZIP64) is currently unsupported, this may not work on apks with the size bigger than 4GB.**
+[Zipalign](https://developer.android.com/studio/command-line/zipalign) in implemented java without any dependencies.
 
 ## Using
 
-It is highly recommended to use a `RandomAccessFile` as the zip input.
+Pass in a `RandomAccessFile` to the function `ZipAlign#alignZip` to provide ZipAlign with a seekable file for more performant aligning.
 ```java
 import com.iyxan23.zipalignjava.ZipAlign;
 
@@ -16,7 +14,7 @@ FileOutputStream zipOut = ...;
 ZipAlign.alignZip(zipIn, zipOut);
 ```
 
-or if you really need it, you can read from an `InputStream`. Do note that this is substantially slower than using `RandomAccessFile`.
+Additionaly, you could use a regular `InputStream`.
 ```java
 import com.iyxan23.zipalignjava.ZipAlign;
 
@@ -28,30 +26,34 @@ ZipAlign.alignZip(zipIn, zipOut);
 
 ## Importing
 
-You can use this library by importing this as a gradle module to your project, building a jar, or just by copying the classes.
+This library is published in [jitpack](https://jitpack.io), you can add it as your dependency it with:
 
-### Building a jar
+```gradle
+allprojects {
+    repositories {
+        mavenCentral()
+        maven { url "https://jitpack.io" }
+    }
+}
 
-To build a jar, run:
-```console
-$ ./gradlew jar
+dependencies {
+    implementation 'com.github.iyxan23:zipalign-java:1.0.0'
+}
 ```
-and you'll have a built jar in the `build/libs` directory.
 
-This jar will contain a very simple cli that allows you to run it in your command line.
+You could also use [prebuilt jars by the CI](https://github.com/Iyxan23/zipalign-java/actions) or in the [releases section](https://github.com/Iyxan23/zipalign-java/releases).
+
+The jar contains a simple CLI that allows you to use it in the command line.
 ```
 $ java -jar zipalign-java-0.1-dev.jar input.zip output.zip
 ```
 
 ## Benchmarks
 
-These benchmarks are ran on an AMD Ryzen 5-5500U CPU with IntelliJ IDEA's runner and Temurin JDK 18.
-
+Benchmarks are ran on an AMD Ryzen 5-5500U CPU with IntelliJ IDEA's runner and Temurin JDK 18.
 ```
 Function                                             Avg elapsed time   Input
 
 ZipAlign#alignZip(RandomAccessFile, OutputStream)    28ms               File from https://github.com/Iyxan23/zipalign-java/issues/1#issue-1236875761 (270K)
 ZipAlign#alignZip(InputStream, OutputStream)         497ms              -- same file --
 ```
-
-[zipalign_code]: https://cs.android.com/android/platform/superproject/+/master:build/make/tools/zipalign/ZipAlign.cpp;l=45
