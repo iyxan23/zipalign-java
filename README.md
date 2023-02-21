@@ -1,6 +1,6 @@
 <h1 align=center><pre>zipalign-java</pre></h1>
 
-[Zipalign](https://developer.android.com/studio/command-line/zipalign) in implemented java without any dependencies.
+[Zipalign](https://developer.android.com/studio/command-line/zipalign) in implemented java without any dependencies. [Read my post about it :>](https://nurihsanalghifari.my.id/posts/Zipalign-java/)
 
 ## Using
 
