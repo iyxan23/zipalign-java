@@ -238,7 +238,7 @@ public class ZipAlign {
                     // calculate the amount of alignment needed
                     long dataPos = fileOffset + 30 + fileNameLen + extraFieldLen + shiftAmount;
                     short wrongOffset = (short) (dataPos % 4096);
-                    short alignAmount = wrongOffset == 0 ? 0 : (short) (alignment - wrongOffset);
+                    short alignAmount = wrongOffset == 0 ? 0 : (short) (4096 - wrongOffset);
                     shiftAmount += alignAmount;
 
                     // only align when alignAmount is not 0 (not already aligned)
