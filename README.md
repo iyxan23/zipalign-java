@@ -46,7 +46,7 @@ allprojects {
 }
 
 dependencies {
-    implementation 'com.github.iyxan23:zipalign-java:1.0.0'
+    implementation 'com.github.iyxan23:zipalign-java:1.1.0'
 }
 ```
 
