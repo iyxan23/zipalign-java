@@ -252,9 +252,9 @@ public class ZipAlign {
                         ));
                     }
 
-                    file.seek(entryStart + 46); // go back to our prev location
                     soAligned = true;
                 }
+                file.seek(entryStart + 46); // go back to our prev location
             }
 
             // if this file is uncompressed, and it has not been aligned, we align it
