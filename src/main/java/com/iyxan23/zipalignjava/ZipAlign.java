@@ -254,7 +254,6 @@ public class ZipAlign {
 
                     soAligned = true;
                 }
-                file.seek(entryStart + 46); // go back to our prev location
             }
 
             // if this file is uncompressed, and it has not been aligned, we align it
@@ -284,11 +283,9 @@ public class ZipAlign {
                             fileNameLen + extraFieldLen
                     ));
                 }
-
-                file.seek(entryStart + 46); // go back to our prev location
             }
 
-            file.seek(file.getFilePointer() + entry_fileNameLen + entry_extraFieldLen + entry_commentLen);
+            file.seek(entryStart + 46 + entry_fileNameLen + entry_extraFieldLen + entry_commentLen);
         }
 
         // done analyzing! now we're going to stream the aligned zip
