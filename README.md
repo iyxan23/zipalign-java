@@ -46,7 +46,7 @@ allprojects {
 }
 
 dependencies {
-    implementation 'com.github.iyxan23:zipalign-java:1.1.0'
+    implementation 'com.github.iyxan23:zipalign-java:1.1.1'
 }
 ```
 
@@ -55,7 +55,7 @@ You could also use [prebuilt jars by the CI](https://github.com/Iyxan23/zipalign
 The jar contains a simple CLI that allows you to use it in the command line.
 
 ```
-$ java -jar zipalign-java-0.1-dev.jar input.zip output.zip
+$ java -jar zipalign-java-1.1.1.jar input.zip output.zip
 ```
 
 ## Benchmarks
