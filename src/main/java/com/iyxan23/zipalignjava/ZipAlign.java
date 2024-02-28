@@ -193,7 +193,7 @@ public class ZipAlign {
 
         // to keep track of how many bytes we've shifted through the whole file (because we're going to pad null bytes
         // to align)
-        short shiftAmount = 0;
+        int shiftAmount = 0;
 
         file.seek(centralDirOffset);
         byte[] entry = new byte[46]; // not including the filename, extra field, and file comment
