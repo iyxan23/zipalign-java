@@ -293,7 +293,10 @@ public class ZipAlign {
         if (neededAlignments.size() == 0) {
             // there is no needed alignment, stream it all!
             byte[] buffer = new byte[8192];
-            while (file.read(buffer) != -1) out.write(buffer);
+            int len;
+            while (-1 != (len = file.read(buffer))){
+                out.write(buffer, 0, len);
+            }
             return;
         }
 
