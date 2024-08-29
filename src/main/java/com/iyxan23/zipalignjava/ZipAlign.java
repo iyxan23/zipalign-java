@@ -20,12 +20,13 @@ import java.util.ArrayList;
  * @see ZipAlign#alignZip(RandomAccessFile, OutputStream)
  * @see ZipAlign#alignZip(RandomAccessFile, OutputStream, int, boolean)
  * @see ZipAlign#alignZip(RandomAccessFile, OutputStream, int)
+ * @see ZipAlign#alignZip(RandomAccessFile, OutputStream, int, int)
  * @see ZipAlign#alignZip(InputStream, OutputStream, int)
  * @see ZipAlign#alignZip(InputStream, OutputStream)
  */
 public class ZipAlign {
     /**
-     * Aligns uncompressed data of the given zip file to 4-byte boundaries and .so files into 4096-byte boundaries.
+     * Aligns uncompressed data of the given zip file to 4-byte boundaries and .so files into 16384-byte (16KiB) boundaries.
      * This function takes a {@link RandomAccessFile} object; to read an {@link InputStream}, check the function
      * {@link ZipAlign#alignZip(InputStream, OutputStream)} <b>(do note that it is substantially slower than using
      * this function)</b><br/>
@@ -55,9 +56,9 @@ public class ZipAlign {
 
     /**
      * Aligns uncompressed data of the given zip file to 4-byte boundaries and optionally align .so files into
-     * 4096-byte boundaries. This function takes a {@link RandomAccessFile} object; to read an {@link InputStream},
-     * check the function {@link ZipAlign#alignZip(InputStream, OutputStream)} <b>(do note that it is substantially
-     * slower than using this function)</b><br/>
+     * 16384-byte (16KiB) boundaries. This function takes a {@link RandomAccessFile} object; to read an {@link
+     * InputStream}, check the function {@link ZipAlign#alignZip(InputStream, OutputStream)} <b>(do note that
+     * it is substantially slower than using this function)</b><br/>
      * <br/>
      * Example:
      * <pre>
@@ -70,7 +71,7 @@ public class ZipAlign {
      *
      * @param file A {@link RandomAccessFile} reference to the zip file.
      * @param out The output where the aligned version of the given zip will be streamed
-     * @param alignSoFiles Aligns .so files in a 4096-bytes boundary
+     * @param alignSoFiles Aligns .so files in a 16384-bytes (16KiB) boundary
      *
      * @throws IOException Will be thrown on IO errors
      * @throws InvalidZipException Will be thrown when the zip given is not valid.
@@ -83,12 +84,11 @@ public class ZipAlign {
         alignZip(file, out, 4, alignSoFiles);
     }
 
-
     /**
-     * Aligns uncompressed data of the given zip file specified byte boundaries and .so files into 4096-byte boundaries.
-     * This function takes a {@link RandomAccessFile} object; to read an {@link InputStream}, check the function
-     * {@link ZipAlign#alignZip(InputStream, OutputStream)} <b>(do note that it is substantially slower than using this
-     * function)</b><br/>
+     * Aligns uncompressed data of the given zip file specified byte boundaries and .so files into 16384-byte (16KiB)
+     * boundaries. This function takes a {@link RandomAccessFile} object; to read an {@link InputStream}, check the
+     * function {@link ZipAlign#alignZip(InputStream, OutputStream)} <b>(do note that it is substantially slower than
+     * using this function)</b><br/>
      * <br/>
      * Example:
      * <pre>
@@ -114,14 +114,11 @@ public class ZipAlign {
         alignZip(file, out, alignment, true);
     }
 
-    // Maximum size of an EOCD record
-    private static final int maxEOCDLookup = 0xffff + 22;
-
     /**
      * Aligns uncompressed data of the given zip file to the specified byte boundaries and optionally align .so files
-     * into 4096-byte boundaries. This function takes a {@link RandomAccessFile} object; to read an {@link InputStream},
-     * check the function {@link ZipAlign#alignZip(InputStream, OutputStream)} <b>(do note that it is substantially
-     * slower than using this function)</b><br/>
+     * into 16384-byte (16KiB) boundaries. This function takes a {@link RandomAccessFile} object; to read an
+     * {@link InputStream}, check the function {@link ZipAlign#alignZip(InputStream, OutputStream)} <b>(do not that
+     * it is substantially slower than using this function)</b><br/>
      * <br/>
      * Example:
      * <pre>
@@ -135,7 +132,7 @@ public class ZipAlign {
      * @param file A {@link RandomAccessFile} reference to the zip file.
      * @param out The output where the aligned version of the given zip will be streamed
      * @param alignment Alignment in bytes, usually 4
-     * @param alignSoFiles Aligns .so files in 4096-bytes boundary
+     * @param alignSoFiles Aligns .so files in 16384-bytes (16KiB) boundary
      *
      * @throws IOException Will be thrown on IO errors
      * @throws InvalidZipException Will be thrown when the zip given is not valid.
@@ -145,6 +142,41 @@ public class ZipAlign {
      * @see ZipAlign#alignZip(InputStream, OutputStream)
      */
     public static void alignZip(RandomAccessFile file, OutputStream out, int alignment, boolean alignSoFiles)
+            throws IOException, InvalidZipException {
+       alignZip(file, out, alignment, 16384);
+    }
+
+    // Maximum size of an EOCD record
+    private static final int maxEOCDLookup = 0xffff + 22;
+
+    /**
+     * Aligns uncompressed data of the given zip file to the specified byte boundaries and optionally align .so files
+     * into 16384-byte (16KiB) boundaries. This function takes a {@link RandomAccessFile} object; to read an
+     * {@link InputStream}, check the function {@link ZipAlign#alignZip(InputStream, OutputStream)} <b>(do note that
+     * it is substantially slower than using this function)</b><br/>
+     * <br/>
+     * Example:
+     * <pre>
+     *     // read-only RandomAccessFile
+     *     RandomAccessFile zipFile = new RandomAccessFile("path/to/file.zip", "r"); // read-only RandomAccessFile
+     *     FileOutputStream zipOut = ...;
+     *
+     *     ZipAlign.alignZip(zipFile, zipOut, 4, 16384);
+     * </pre>
+     *
+     * @param file A {@link RandomAccessFile} reference to the zip file.
+     * @param out The output where the aligned version of the given zip will be streamed
+     * @param alignment Alignment in bytes, usually 4
+     * @param soFileAlignment Alignment for .so files in bytes, 4096 (4KiB) in older systems, recommended 16384 (16KiB) to support Android 15+; set to 0 to disable.
+     *
+     * @throws IOException Will be thrown on IO errors
+     * @throws InvalidZipException Will be thrown when the zip given is not valid.
+     *
+     * @see ZipAlign#alignZip(RandomAccessFile, OutputStream)
+     * @see ZipAlign#alignZip(InputStream, OutputStream, int)
+     * @see ZipAlign#alignZip(InputStream, OutputStream)
+     */
+    public static void alignZip(RandomAccessFile file, OutputStream out, int alignment, int soFileAlignment)
             throws IOException, InvalidZipException {
 
         // find the end of central directory
@@ -220,7 +252,7 @@ public class ZipAlign {
             boolean soAligned = false;
 
             // read the filename to check whether it is an .so file (of which we shall align if alignSoFiles is true)
-            if (alignSoFiles) {
+            if (soFileAlignment != 0) {
                 byte[] filenameBuffer = new byte[entry_fileNameLen];
                 file.read(filenameBuffer);
 
@@ -237,8 +269,8 @@ public class ZipAlign {
 
                     // calculate the amount of alignment needed
                     long dataPos = fileOffset + 30 + fileNameLen + extraFieldLen + shiftAmount;
-                    short wrongOffset = (short) (dataPos % 4096);
-                    short alignAmount = wrongOffset == 0 ? 0 : (short) (4096 - wrongOffset);
+                    short wrongOffset = (short) (dataPos % soFileAlignment);
+                    short alignAmount = wrongOffset == 0 ? 0 : (short) (soFileAlignment - wrongOffset);
                     shiftAmount += alignAmount;
 
                     // only align when alignAmount is not 0 (not already aligned)
@@ -294,7 +326,7 @@ public class ZipAlign {
             // there is no needed alignment, stream it all!
             byte[] buffer = new byte[8192];
             int len;
-            while (-1 != (len = file.read(buffer))){
+            while (-1 != (len = file.read(buffer))) {
                 out.write(buffer, 0, len);
             }
             return;
