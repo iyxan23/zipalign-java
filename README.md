@@ -27,10 +27,16 @@ FileOutputStream zipOut = ...;
 ZipAlign.alignZip(zipIn, zipOut);
 ```
 
-Aligning .so files to 4KiB page boundaries are enabled by default, pass in a boolean to opt out:
+Aligning .so files to 16KiB page boundaries is enabled by default, pass in a boolean to opt out:
 
 ```java
 ZipAlign.alignZip(zipIn, zipOut, false);
+```
+
+Prefer to align .so files in a 4KiB page boundaries?
+
+```java
+ZipAlign.alignZip(zipIn, zipOut, 4, 4096);
 ```
 
 ## Importing
