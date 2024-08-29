@@ -269,8 +269,8 @@ public class ZipAlign {
 
                     // calculate the amount of alignment needed
                     long dataPos = fileOffset + 30 + fileNameLen + extraFieldLen + shiftAmount;
-                    short wrongOffset = (short) (dataPos % soFileAlignment);
-                    short alignAmount = wrongOffset == 0 ? 0 : (short) (soFileAlignment - wrongOffset);
+                    int wrongOffset = (int) (dataPos % soFileAlignment);
+                    int alignAmount = wrongOffset == 0 ? 0 : (soFileAlignment - wrongOffset);
                     shiftAmount += alignAmount;
 
                     // only align when alignAmount is not 0 (not already aligned)
@@ -301,8 +301,8 @@ public class ZipAlign {
 
                 // calculate the amount of alignment needed
                 long dataPos = fileOffset + 30 + fileNameLen + extraFieldLen + shiftAmount;
-                short wrongOffset = (short) (dataPos % alignment);
-                short alignAmount = wrongOffset == 0 ? 0 : (short) (alignment - wrongOffset);
+                int wrongOffset = (int) (dataPos % alignment);
+                int alignAmount = wrongOffset == 0 ? 0 : (alignment - wrongOffset);
                 shiftAmount += alignAmount;
 
                 // only align when alignAmount is not 0 (not already aligned)
@@ -381,12 +381,12 @@ public class ZipAlign {
     }
 
     private static class Alignment {
-        public short alignAmount;
+        public int alignAmount;
         public long extraFieldLenOffset;
         public short extraFieldLenValue;
         public int extraFieldExtensionOffset;
 
-        public Alignment(short alignAmount, long extraFieldLenOffset, short extraFieldLenValue,
+        public Alignment(int alignAmount, long extraFieldLenOffset, short extraFieldLenValue,
                          int extraFieldExtensionOffset) {
             this.alignAmount = alignAmount;
             this.extraFieldLenOffset = extraFieldLenOffset;
