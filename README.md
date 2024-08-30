@@ -16,7 +16,7 @@ FileOutputStream zipOut = ...;
 ZipAlign.alignZip(zipIn, zipOut);
 ```
 
-Additionaly, you could use a regular `InputStream`.
+Additionaly, you could use a regular `InputStream` (caution: terribly slow)
 
 ```java
 import com.iyxan23.zipalignjava.ZipAlign;
@@ -27,15 +27,21 @@ FileOutputStream zipOut = ...;
 ZipAlign.alignZip(zipIn, zipOut);
 ```
 
+> [!WARNING]
+> The `InputStream` API is deprecated and is not supported anymore, it does not support aligning
+> `.so` files and will not be.
+
 Aligning .so files to 16KiB page boundaries is enabled by default, pass in a boolean to opt out:
 
 ```java
+// only if zipIn is a RandomAccessFile
 ZipAlign.alignZip(zipIn, zipOut, false);
 ```
 
 Prefer to align .so files in a 4KiB page boundaries?
 
 ```java
+// only if zipIn is a RandomAccessFile
 ZipAlign.alignZip(zipIn, zipOut, 4, 4096);
 ```
 
