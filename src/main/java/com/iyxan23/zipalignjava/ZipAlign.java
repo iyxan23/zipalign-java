@@ -214,11 +214,12 @@ public class ZipAlign {
         file.read(buf);
         ByteBuffer eocdBuffer = ByteBuffer.wrap(buf)
                 .order(ByteOrder.LITTLE_ENDIAN);
+        UnsignedByteBufferWrapper eocdBufferUw = new UnsignedByteBufferWrapper(eocdBuffer);
 
         // read em
-        short totalEntries = eocdBuffer.getShort();
-        int centralDirSize = eocdBuffer.getInt();
-        int centralDirOffset = eocdBuffer.getInt();
+        int totalEntries = eocdBufferUw.getUShort();
+        long centralDirSize = eocdBufferUw.getUInt();
+        long centralDirOffset = eocdBufferUw.getUInt();
 
         ArrayList<Alignment> neededAlignments = new ArrayList<>();
         ArrayList<FileOffsetShift> shifts = new ArrayList<>();
@@ -232,6 +233,8 @@ public class ZipAlign {
         ByteBuffer entryBuffer = ByteBuffer.wrap(entry)
                 .order(ByteOrder.LITTLE_ENDIAN);
 
+        UnsignedByteBufferWrapper entryBufferUw = new UnsignedByteBufferWrapper(entryBuffer);
+
         for (int ei = 0; ei < totalEntries; ei++) {
             final long entryStart = file.getFilePointer();
             file.read(entry);
@@ -241,10 +244,10 @@ public class ZipAlign {
                         "assumed central directory entry at " + entryStart + " doesn't start with a signature"
                 );
 
-            short entry_fileNameLen = entryBuffer.getShort(28);
-            short entry_extraFieldLen = entryBuffer.getShort(30);
-            short entry_commentLen = entryBuffer.getShort(32);
-            int fileOffset = entryBuffer.getInt(42);
+            int entry_fileNameLen = entryBufferUw.getUShort(28);
+            int entry_extraFieldLen = entryBufferUw.getUShort(30);
+            int entry_commentLen = entryBufferUw.getUShort(32);
+            long fileOffset = entryBufferUw.getUInt(42);
 
             if (shiftAmount != 0)
                 shifts.add(new FileOffsetShift(entryStart + 42, fileOffset + shiftAmount));
@@ -263,9 +266,12 @@ public class ZipAlign {
 
                     // read the filename & extra field length
                     ByteBuffer lengths = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+                    UnsignedByteBufferWrapper lengthsUw
+                        = new UnsignedByteBufferWrapper(lengths);
+
                     file.read(lengths.array());
-                    short fileNameLen = lengths.getShort();
-                    short extraFieldLen = lengths.getShort();
+                    int fileNameLen = lengthsUw.getUShort();
+                    int extraFieldLen = lengthsUw.getUShort();
 
                     // calculate the amount of alignment needed
                     long dataPos = fileOffset + 30 + fileNameLen + extraFieldLen + shiftAmount;
@@ -280,8 +286,7 @@ public class ZipAlign {
                                 alignAmount,
                                 fileOffset + 28,
                                 (short) (extraFieldLen + alignAmount),
-                                fileNameLen + extraFieldLen
-                        ));
+                                fileNameLen + extraFieldLen));
                     }
 
                     soAligned = true;
@@ -295,9 +300,12 @@ public class ZipAlign {
 
                 // read the filename & extra field length
                 ByteBuffer lengths = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+                UnsignedByteBufferWrapper lengthsUw
+                    = new UnsignedByteBufferWrapper(lengths);
+
                 file.read(lengths.array());
-                short fileNameLen = lengths.getShort();
-                short extraFieldLen = lengths.getShort();
+                int fileNameLen = lengthsUw.getUShort();
+                int extraFieldLen = lengthsUw.getUShort();
 
                 // calculate the amount of alignment needed
                 long dataPos = fileOffset + 30 + fileNameLen + extraFieldLen + shiftAmount;
@@ -312,8 +320,7 @@ public class ZipAlign {
                             alignAmount,
                             fileOffset + 28,
                             (short) (extraFieldLen + alignAmount),
-                            fileNameLen + extraFieldLen
-                    ));
+                            fileNameLen + extraFieldLen));
                 }
             }
 
@@ -359,21 +366,21 @@ public class ZipAlign {
             passBytes(file, out, shift.eocdhPosition - file.getFilePointer());
 
             // write shifted file offset (in litte-endian)
-            out.write(shift.shiftedFileOffset & 0xFF);
-            out.write((shift.shiftedFileOffset >>> 8) & 0xFF);
-            out.write((shift.shiftedFileOffset >>> 16) & 0xFF);
-            out.write((shift.shiftedFileOffset >>> 24) & 0xFF);
+            out.write((int) (shift.shiftedFileOffset & 0xFF));
+            out.write((int) (shift.shiftedFileOffset >>> 8) & 0xFF);
+            out.write((int) (shift.shiftedFileOffset >>> 16) & 0xFF);
+            out.write((int) (shift.shiftedFileOffset >>> 24) & 0xFF);
             file.readInt(); // mirror the new position to the file
         }
 
         // after that we need to edit the EOCDR's "EOCDH start offset" field
         passBytes(file, out, eocdPosition + 0x10 - file.getFilePointer());
-        int shiftedCDOffset = centralDirOffset + shiftAmount;
+        long shiftedCDOffset = centralDirOffset + shiftAmount;
 
-        out.write(shiftedCDOffset & 0xFF);
-        out.write((shiftedCDOffset >>> 8) & 0xFF);
-        out.write((shiftedCDOffset >>> 16) & 0xFF);
-        out.write((shiftedCDOffset >>> 24) & 0xFF);
+        out.write((int) (shiftedCDOffset & 0xFF));
+        out.write((int) (shiftedCDOffset >>> 8) & 0xFF);
+        out.write((int) (shiftedCDOffset >>> 16) & 0xFF);
+        out.write((int) (shiftedCDOffset >>> 24) & 0xFF);
         file.readInt(); // mirror the new position change
 
         // write all that's left
@@ -407,9 +414,9 @@ public class ZipAlign {
 
     private static class FileOffsetShift {
         public long eocdhPosition;
-        public int shiftedFileOffset;
+        public long shiftedFileOffset;
 
-        public FileOffsetShift(long eocdhPosition, int shiftedFileOffset) {
+        public FileOffsetShift(long eocdhPosition, long shiftedFileOffset) {
             this.eocdhPosition = eocdhPosition;
             this.shiftedFileOffset = shiftedFileOffset;
         }
