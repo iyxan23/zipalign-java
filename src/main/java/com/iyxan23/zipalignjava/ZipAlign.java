@@ -193,19 +193,26 @@ public class ZipAlign {
         }
 
         // find the signature
-        file.seek(seekStart);
+        byte[] eocdBuf = new byte[readAmount];
+        file.seek(file.length() - readAmount);
+        file.readFully(eocdBuf);
 
-        int i;
-        for (i = readAmount - 4; i >= 0; i--) {
-            if (file.readByte() != 0x50) continue;
-            file.seek(file.getFilePointer() - 1);
-            if (file.readInt() == 0x504b0506) break; // EOCD signature (in big-endian)
+        long eocdPosition = -1;
+
+        // scan backwards for EOCD signature
+        for (int i = readAmount - 4; i >= 0; i--) {
+            if ((eocdBuf[i]     & 0xFF) == 0x50 &&
+                (eocdBuf[i + 1] & 0xFF) == 0x4B &&
+                (eocdBuf[i + 2] & 0xFF) == 0x05 &&
+                (eocdBuf[i + 3] & 0xFF) == 0x06) {
+
+                eocdPosition = file.length() - readAmount + i - 4;
+                break;
+            }
         }
 
-        if (i < 0)
+        if (eocdPosition == -1)
             throw new InvalidZipException("No end-of-central-directory found");
-
-        long eocdPosition = file.getFilePointer() - 4;
 
         // skip disk fields
         file.seek(eocdPosition + 10);
